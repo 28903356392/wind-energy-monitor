@@ -1,0 +1,7 @@
+.ai-code-tracker.json
+*/*loack.json
+*/*node_modules
+*/*package-lock.json
+*/*yarn.lock
+*/*.log
+*/dist
