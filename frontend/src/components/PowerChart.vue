@@ -2,47 +2,34 @@
   <div ref="chartRef" class="chart-container"></div>
 </template>
 
-<script setup>
-import { ref, onMounted, watch, onBeforeUnmount } from 'vue'
+<script setup lang="ts">
+import { computed } from 'vue'
 import * as echarts from 'echarts'
+import { useECharts } from '../composables/useECharts'
+import type { PowerRecord } from '../types'
 
-const props = defineProps({
-  history: { type: Array, default: () => [] },
-  realtimeTotal: { type: Number, default: 0 }
-})
+const props = defineProps<{
+  history: PowerRecord[]
+  realtimeTotal?: number
+}>()
 
-const chartRef = ref(null)
-let chart = null
+const chartOption = computed<echarts.EChartsOption | null>(() => {
+  if (!props.history.length) return null
 
-function initChart() {
-  if (!chartRef.value) return
-  chart = echarts.init(chartRef.value, 'dark')
-  updateChart()
-  window.addEventListener('resize', handleResize)
-}
-
-function handleResize() {
-  chart?.resize()
-}
-
-function updateChart() {
-  if (!chart) return
-
-  // 取最近60个数据点
   const data = props.history.slice(-60)
-  const timestamps = data.map(d => {
+  const timestamps = data.map((d) => {
     const t = new Date(d.timestamp)
-    return t.getHours().toString().padStart(2, '0') + ':' + t.getMinutes().toString().padStart(2, '0')
+    return `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`
   })
-  const powerData = data.map(d => d.total_power)
-  const windData = data.map(d => d.avg_wind_speed)
+  const powerData = data.map((d) => d.total_power)
+  const windData = data.map((d) => d.avg_wind_speed)
 
-  const option = {
+  return {
     tooltip: {
       trigger: 'axis',
       backgroundColor: 'rgba(2, 13, 31, 0.85)',
       borderColor: 'rgba(0, 212, 255, 0.3)',
-      textStyle: { color: '#e0e6ed', fontSize: 11 }
+      textStyle: { color: '#e0e6ed', fontSize: 11 },
     },
     legend: {
       data: ['总功率', '平均风速'],
@@ -51,17 +38,15 @@ function updateChart() {
       right: 0,
       icon: 'roundRect',
       itemWidth: 12,
-      itemHeight: 4
+      itemHeight: 4,
     },
-    grid: {
-      left: 40, right: 20, top: 26, bottom: 20
-    },
+    grid: { left: 40, right: 20, top: 26, bottom: 20 },
     xAxis: {
       type: 'category',
       data: timestamps,
       axisLine: { lineStyle: { color: 'rgba(0, 212, 255, 0.15)' } },
       axisLabel: { color: 'rgba(255,255,255,0.3)', fontSize: 9, interval: 'auto' },
-      splitLine: { show: false }
+      splitLine: { show: false },
     },
     yAxis: [
       {
@@ -69,15 +54,15 @@ function updateChart() {
         name: 'kW',
         nameTextStyle: { color: 'rgba(255,255,255,0.3)', fontSize: 9 },
         axisLabel: { color: 'rgba(255,255,255,0.3)', fontSize: 9 },
-        splitLine: { lineStyle: { color: 'rgba(0, 212, 255, 0.06)', type: 'dashed' } }
+        splitLine: { lineStyle: { color: 'rgba(0, 212, 255, 0.06)', type: 'dashed' } },
       },
       {
         type: 'value',
         name: 'm/s',
         nameTextStyle: { color: 'rgba(255,255,255,0.3)', fontSize: 9 },
         axisLabel: { color: 'rgba(255,255,255,0.3)', fontSize: 9 },
-        splitLine: { show: false }
-      }
+        splitLine: { show: false },
+      },
     ],
     series: [
       {
@@ -92,19 +77,19 @@ function updateChart() {
             type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [
               { offset: 0, color: '#00d4ff' },
-              { offset: 1, color: '#00ff88' }
-            ]
-          }
+              { offset: 1, color: '#00ff88' },
+            ],
+          },
         },
         areaStyle: {
           color: {
             type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [
               { offset: 0, color: 'rgba(0, 212, 255, 0.25)' },
-              { offset: 1, color: 'rgba(0, 212, 255, 0.02)' }
-            ]
-          }
-        }
+              { offset: 1, color: 'rgba(0, 212, 255, 0.02)' },
+            ],
+          },
+        },
       },
       {
         name: '平均风速',
@@ -119,29 +104,16 @@ function updateChart() {
             type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [
               { offset: 0, color: 'rgba(255, 217, 61, 0.12)' },
-              { offset: 1, color: 'rgba(255, 217, 61, 0.01)' }
-            ]
-          }
-        }
-      }
-    ]
-  }
-
-  chart.setOption(option, true)
-}
-
-watch(() => [props.history, props.realtimeTotal], () => {
-  updateChart()
-}, { deep: true })
-
-onMounted(() => {
-  initChart()
+              { offset: 1, color: 'rgba(255, 217, 61, 0.01)' },
+            ],
+          },
+        },
+      },
+    ],
+  } as echarts.EChartsOption
 })
 
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', handleResize)
-  chart?.dispose()
-})
+const { chartRef } = useECharts(chartOption)
 </script>
 
 <style scoped>

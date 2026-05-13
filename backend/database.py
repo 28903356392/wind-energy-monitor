@@ -2,7 +2,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from config import DATABASE_URL
-from models import Base, Turbine, PowerRecord, TurbineStatus
+from models import Base, Turbine, PowerRecord, TurbineStatus, Alarm, AlarmLevel, EventLog
 from datetime import datetime, timezone, timedelta
 import random
 import math
@@ -23,12 +23,11 @@ def get_session() -> Session:
 def seed_mock_data():
     """填充模拟数据"""
     session = get_session()
-    # 如果已有数据则跳过
     if session.query(Turbine).count() > 0:
         session.close()
         return
 
-    # 风机经纬度坐标（模拟一个风电场布局）
+    # ---- 风机坐标 ----
     coordinates = [
         (40.12, 116.30), (40.13, 116.32), (40.14, 116.28), (40.11, 116.35),
         (40.15, 116.31), (40.12, 116.33), (40.13, 116.29), (40.14, 116.34),
@@ -60,9 +59,9 @@ def seed_mock_data():
         )
         session.add(turbine)
 
-    # 生成历史发电量数据（过去24小时，每5分钟一个点）
+    # ---- 发电量历史 ----
     now = datetime.now(timezone.utc)
-    for i in range(288):  # 24h * 12
+    for i in range(288):
         t = now - timedelta(minutes=5 * (288 - i))
         base_power = 12000 + 3000 * math.sin(i * math.pi / 48) + random.uniform(-500, 500)
         record = PowerRecord(
@@ -73,6 +72,64 @@ def seed_mock_data():
         )
         session.add(record)
 
+    # ---- 告警数据 ----
+    alarm_templates = [
+        (AlarmLevel.INFO, "{name} 功率波动轻微异常", 100, 200),
+        (AlarmLevel.WARNING, "{name} 温度偏高，建议检查冷却系统", 42, 40),
+        (AlarmLevel.WARNING, "{name} 风速超过安全阈值", 28, 25),
+        (AlarmLevel.CRITICAL, "{name} 震动异常，紧急停机", 0, 0),
+        (AlarmLevel.INFO, "{name} 维护计划即将到期", 0, 0),
+        (AlarmLevel.CRITICAL, "{name} 电网连接中断", 0, 0),
+        (AlarmLevel.WARNING, "{name} 发电效率低于预期", 680, 750),
+        (AlarmLevel.INFO, "{name} 已完成例行检查", 0, 0),
+    ]
+
+    turbines_list = session.query(Turbine).all()
+    for _ in range(30):
+        tmpl = random.choice(alarm_templates)
+        t = random.choice(turbines_list)
+        alarm = Alarm(
+            turbine_id=t.id,
+            turbine_name=t.name,
+            level=tmpl[0],
+            message=tmpl[1].format(name=t.name),
+            value=tmpl[2] + random.uniform(-10, 10),
+            threshold=tmpl[3],
+            created_at=now - timedelta(
+                hours=random.randint(0, 48),
+                minutes=random.randint(0, 59)
+            ),
+            acknowledged=random.random() < 0.6,
+        )
+        session.add(alarm)
+
+    # ---- 事件日志 ----
+    event_types = ["operation", "system", "alarm"]
+    event_messages = [
+        ("operation", "风机 {name} 启动成功"),
+        ("operation", "风机 {name} 停机"),
+        ("system", "系统状态检查完成"),
+        ("system", "数据同步任务执行成功"),
+        ("alarm", "告警规则已触发: {name}"),
+        ("operation", "运维人员登录系统"),
+        ("system", "数据库备份完成"),
+        ("operation", "参数配置已更新: {name}"),
+    ]
+
+    for _ in range(60):
+        tmpl = random.choice(event_messages)
+        t = random.choice(turbines_list)
+        event = EventLog(
+            type=tmpl[0],
+            message=tmpl[1].format(name=t.name),
+            detail=f"ID: {t.id}, 时间: {now - timedelta(minutes=random.randint(0, 1440))}",
+            timestamp=now - timedelta(
+                hours=random.randint(0, 72),
+                minutes=random.randint(0, 59)
+            ),
+        )
+        session.add(event)
+
     session.commit()
     session.close()
-    print("✅ 模拟数据已初始化")
+    print("[OK] 模拟数据已初始化（含告警、事件）")

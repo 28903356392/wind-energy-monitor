@@ -4,11 +4,18 @@
     <header class="header">
       <div class="header-decoration left"></div>
       <div class="header-content">
-        <h1 class="title">🌬️ 风电场智能监控平台</h1>
+        <h1 class="title">风电场智能监控平台</h1>
         <div class="subtitle">Wind Energy Monitoring System</div>
       </div>
       <div class="header-decoration right"></div>
-      <div class="clock">{{ currentTime }}</div>
+      <div class="header-right">
+        <nav class="nav-links">
+          <router-link to="/" class="nav-link active">总览</router-link>
+          <router-link to="/alarms" class="nav-link">告警</router-link>
+          <router-link to="/energy" class="nav-link">报告</router-link>
+        </nav>
+        <div class="clock">{{ time }}</div>
+      </div>
     </header>
 
     <!-- 核心指标 -->
@@ -16,7 +23,6 @@
 
     <!-- 中间主体 -->
     <div class="main-content">
-      <!-- 左侧：风机状态列表 -->
       <div class="panel panel-left">
         <div class="panel-header">
           <span class="panel-dot"></span>
@@ -27,7 +33,6 @@
         </div>
       </div>
 
-      <!-- 中间：发电量趋势图 -->
       <div class="panel panel-center">
         <div class="panel-header">
           <span class="panel-dot"></span>
@@ -38,7 +43,6 @@
         </div>
       </div>
 
-      <!-- 右侧：风况信息 -->
       <div class="panel panel-right">
         <div class="panel-header">
           <span class="panel-dot"></span>
@@ -54,75 +58,61 @@
     <footer class="footer">
       <span>数据每3秒自动更新</span>
       <span class="sep">|</span>
-      <span v-if="wsConnected" class="status-online">🟢 WebSocket 已连接</span>
-      <span v-else class="status-offline">🔴 WebSocket 未连接</span>
+      <span v-if="wsConnected" class="status-online">WebSocket 已连接</span>
+      <span v-else class="status-offline">WebSocket 未连接</span>
+      <span class="sep">|</span>
+      <span class="alarm-badge" v-if="alarmCount > 0" @click="$router.push('/alarms')">
+        未处理告警 {{ alarmCount }} 条
+      </span>
     </footer>
   </div>
 </template>
 
-<script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
-import { getOverview, getTurbines, getPowerHistory, createWebSocket } from '../api/index.js'
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useClock } from '../composables/useClock'
+import { useWebSocket } from '../composables/useWebSocket'
+import { fetchDashboardData } from '../api/modules'
 import StatsCards from '../components/StatsCards.vue'
 import TurbineStatus from '../components/TurbineStatus.vue'
 import PowerChart from '../components/PowerChart.vue'
 import WindInfo from '../components/WindInfo.vue'
+import type { OverviewData, Turbine, PowerRecord, WsMessage } from '../types'
 
-const overviewData = ref(null)
-const turbines = ref([])
-const powerHistory = ref([])
-const currentTime = ref('')
-const wsConnected = ref(false)
+const router = useRouter()
+const { time } = useClock()
 
-let timer = null
-let ws = null
+const overviewData = ref<OverviewData | null>(null)
+const turbines = ref<Turbine[]>([])
+const powerHistory = ref<PowerRecord[]>([])
+const alarmCount = ref(0)
 
-function updateClock() {
-  const now = new Date()
-  currentTime.value = now.toLocaleString('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-    hour12: false
-  })
-}
+// WebSocket
+const { connected: wsConnected, connect: wsConnect } = useWebSocket((data: WsMessage) => {
+  if (data.type === 'update') {
+    overviewData.value = {
+      ...(overviewData.value || {} as OverviewData),
+      total_power: data.total_power,
+      updated_at: data.timestamp,
+    } as OverviewData
+    turbines.value = data.turbines as Turbine[]
+  } else if (data.type === 'alarm') {
+    alarmCount.value++
+  }
+})
 
-async function fetchData() {
+// 初始加载
+onMounted(async () => {
   try {
-    const [overviewRes, turbinesRes, historyRes] = await Promise.all([
-      getOverview(),
-      getTurbines(),
-      getPowerHistory(24)
-    ])
-    overviewData.value = overviewRes.data.data
-    turbines.value = turbinesRes.data.data
-    powerHistory.value = historyRes.data.data
+    const data = await fetchDashboardData()
+    overviewData.value = data.overview
+    turbines.value = data.turbines
+    powerHistory.value = data.powerHistory
   } catch (err) {
     console.error('数据获取失败:', err)
   }
-}
-
-onMounted(() => {
-  updateClock()
-  timer = setInterval(updateClock, 1000)
-  fetchData()
-
-  // 建立 WebSocket 实时连接
-  ws = createWebSocket((data) => {
-    wsConnected.value = true
-    if (data.type === 'update') {
-      overviewData.value = {
-        ...(overviewData.value || {}),
-        total_power: data.total_power,
-        updated_at: data.timestamp
-      }
-      turbines.value = data.turbines
-    }
-  })
-})
-
-onBeforeUnmount(() => {
-  clearInterval(timer)
-  if (ws) ws.close()
+  wsConnect()
 })
 </script>
 
@@ -132,8 +122,8 @@ onBeforeUnmount(() => {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(135deg, #020d1f 0%, #0a1a3a 50%, #020d1f 100%);
-  padding: 12px 16px;
+  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, var(--bg-primary) 100%);
+  padding: clamp(8px, 1.2vh, 16px) clamp(10px, 1.5vw, 24px);
   overflow: hidden;
 }
 
@@ -143,119 +133,112 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 70px;
-  min-height: 70px;
-  margin-bottom: 12px;
+  height: clamp(56px, 6vh, 80px);
+  min-height: 56px;
+  margin-bottom: clamp(8px, 1vh, 16px);
 }
-
 .header-decoration {
-  width: 200px;
+  width: clamp(120px, 15vw, 240px);
   height: 2px;
-  background: linear-gradient(90deg, transparent, #00d4ff, transparent);
+  background: linear-gradient(90deg, transparent, var(--color-primary), transparent);
 }
 .header-decoration.left { transform: rotate(180deg); }
-
-.header-content {
-  text-align: center;
-  padding: 0 30px;
-}
+.header-content { text-align: center; padding: 0 clamp(16px, 3vw, 40px); }
 
 .title {
-  font-size: 28px;
+  font-size: clamp(20px, 2.5vw, 34px);
   font-weight: 700;
-  background: linear-gradient(90deg, #00d4ff, #00ff88);
+  background: linear-gradient(90deg, var(--color-primary), var(--color-success));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   letter-spacing: 6px;
   text-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
 }
-
 .subtitle {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
+  font-size: clamp(10px, 0.7vw, 13px);
+  color: var(--text-muted);
   letter-spacing: 4px;
   margin-top: 2px;
 }
 
-.clock {
+.header-right {
   position: absolute;
   right: 10px;
-  font-size: 16px;
-  color: #00d4ff;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.nav-links { display: flex; gap: 4px; }
+.nav-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: var(--text-xs);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+.nav-link:hover, .nav-link.active {
+  color: var(--color-primary);
+  background: rgba(0, 212, 255, 0.1);
+}
+
+.clock {
+  font-size: var(--text-sm);
+  color: var(--color-primary);
   font-family: 'Courier New', monospace;
   letter-spacing: 2px;
+  white-space: nowrap;
 }
 
 /* 中间内容 */
 .main-content {
   flex: 1;
   display: grid;
-  grid-template-columns: 280px 1fr 280px;
-  gap: 12px;
+  grid-template-columns: clamp(220px, 18vw, 320px) 1fr clamp(220px, 18vw, 320px);
+  gap: clamp(8px, 1vw, 14px);
   min-height: 0;
 }
 
 .panel {
-  background: rgba(0, 40, 80, 0.35);
-  border: 1px solid rgba(0, 212, 255, 0.15);
-  border-radius: 8px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-
 .panel-header {
-  padding: 10px 14px;
-  font-size: 14px;
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--text-sm);
   font-weight: 600;
-  color: #00d4ff;
+  color: var(--color-primary);
   background: rgba(0, 212, 255, 0.06);
-  border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-xs);
   flex-shrink: 0;
 }
-
-.panel-dot {
-  width: 8px;
-  height: 8px;
-  background: #00d4ff;
-  border-radius: 50%;
-  box-shadow: 0 0 8px rgba(0, 212, 255, 0.6);
-}
-
-.panel-body {
-  flex: 1;
-  padding: 10px;
-  overflow: auto;
-}
+.panel-dot { width: 8px; height: 8px; background: var(--color-primary); border-radius: 50%; box-shadow: 0 0 8px rgba(0, 212, 255, 0.6); }
+.panel-body { flex: 1; padding: var(--space-md); overflow: auto; min-height: 0; }
 
 /* 底部 */
 .footer {
-  height: 32px;
-  min-height: 32px;
+  height: clamp(28px, 3vh, 36px);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
-  border-top: 1px solid rgba(0, 212, 255, 0.08);
-  margin-top: 8px;
+  gap: clamp(8px, 1vw, 16px);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-light);
+  margin-top: clamp(4px, 0.8vh, 10px);
+  flex-shrink: 0;
 }
-
-.sep { color: rgba(255, 255, 255, 0.15); }
-
-.status-online { color: #00ff88; }
-.status-offline { color: #ff6b6b; }
-
-/* 滚动条美化 */
-.panel-body::-webkit-scrollbar {
-  width: 4px;
-}
-.panel-body::-webkit-scrollbar-thumb {
-  background: rgba(0, 212, 255, 0.3);
-  border-radius: 2px;
-}
+.sep { color: rgba(255, 255, 255, 0.1); }
+.status-online { color: var(--color-success); }
+.status-offline { color: var(--color-danger); }
+.alarm-badge { color: var(--color-warning); cursor: pointer; }
+.alarm-badge:hover { text-decoration: underline; }
 </style>

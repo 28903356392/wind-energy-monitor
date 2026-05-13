@@ -1,5 +1,5 @@
 """数据模型"""
-from sqlalchemy import Column, Integer, String, Float, DateTime, Enum as SAEnum
+from sqlalchemy import Column, Integer, String, Float, DateTime, Enum as SAEnum, Boolean, Text
 from sqlalchemy.orm import DeclarativeBase
 from datetime import datetime, timezone
 import enum
@@ -14,6 +14,12 @@ class TurbineStatus(str, enum.Enum):
     STOPPED = "stopped"        # 已停机
     MAINTENANCE = "maintenance"  # 维护中
     FAULT = "fault"            # 故障
+
+
+class AlarmLevel(str, enum.Enum):
+    INFO = "info"
+    WARNING = "warning"
+    CRITICAL = "critical"
 
 
 class Turbine(Base):
@@ -42,3 +48,29 @@ class PowerRecord(Base):
     total_power = Column(Float, default=0.0)         # 总功率 (kW)
     avg_wind_speed = Column(Float, default=0.0)      # 平均风速 (m/s)
     energy_hourly = Column(Float, default=0.0)       # 小时发电量
+
+
+class Alarm(Base):
+    """告警记录"""
+    __tablename__ = "alarms"
+
+    id = Column(Integer, primary_key=True, index=True)
+    turbine_id = Column(Integer, nullable=False)
+    turbine_name = Column(String(50), nullable=False)
+    level = Column(SAEnum(AlarmLevel), default=AlarmLevel.INFO)
+    message = Column(String(200), nullable=False)
+    value = Column(Float, default=0.0)
+    threshold = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    acknowledged = Column(Boolean, default=False)
+
+
+class EventLog(Base):
+    """事件日志"""
+    __tablename__ = "event_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    type = Column(String(20), nullable=False)  # operation / system / alarm
+    message = Column(String(200), nullable=False)
+    detail = Column(Text, nullable=True)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))

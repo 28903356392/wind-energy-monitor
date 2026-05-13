@@ -1,0 +1,97 @@
+/* ============================================================
+   风能监控大屏 - 样式适配方案
+   ============================================================
+   适配策略：vw/vh 响应式 + CSS Grid 弹性布局 + CSS 自定义属性
+   
+   核心原则：
+   1. 使用 vw/vh 作为基础尺寸单位，实现视口自适应
+   2. 字体使用 clamp() 进行流体排版，保证可读性
+   3. 布局使用 CSS Grid 的 fr 单位，面板自动弹性伸缩
+   4. 颜色/边框/阴影等通过 CSS 变量统一管理，便于主题切换
+   5. 无需媒体查询 —— 大屏场景下基于视口等比缩放
+   ============================================================ */
+
+:root {
+  /* ---- 主色调 ---- */
+  --color-primary: #00d4ff;
+  --color-success: #00ff88;
+  --color-warning: #ffd93d;
+  --color-danger: #ff6b6b;
+  --color-info: #c084fc;
+
+  /* ---- 背景色 ---- */
+  --bg-primary: #020d1f;
+  --bg-secondary: #0a1a3a;
+  --bg-panel: rgba(0, 40, 80, 0.35);
+  --bg-panel-hover: rgba(0, 40, 80, 0.5);
+
+  /* ---- 边框 ---- */
+  --border-color: rgba(0, 212, 255, 0.15);
+  --border-light: rgba(0, 212, 255, 0.08);
+
+  /* ---- 文字 ---- */
+  --text-primary: #e0e6ed;
+  --text-secondary: rgba(255, 255, 255, 0.5);
+  --text-muted: rgba(255, 255, 255, 0.3);
+
+  /* ---- 字号（clamp 流体排版） ---- */
+  --text-xs: clamp(10px, 0.6vw, 13px);
+  --text-sm: clamp(12px, 0.8vw, 15px);
+  --text-base: clamp(14px, 1vw, 18px);
+  --text-lg: clamp(18px, 1.4vw, 24px);
+  --text-xl: clamp(24px, 2vw, 36px);
+  --text-2xl: clamp(32px, 2.8vw, 48px);
+
+  /* ---- 间距 ---- */
+  --space-xs: clamp(4px, 0.3vw, 8px);
+  --space-sm: clamp(8px, 0.6vw, 12px);
+  --space-md: clamp(12px, 1vw, 20px);
+  --space-lg: clamp(16px, 1.4vw, 28px);
+
+  /* ---- 圆角 ---- */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* ---- 发光特效 ---- */
+  --glow-primary: 0 0 20px rgba(0, 212, 255, 0.3);
+  --glow-success: 0 0 20px rgba(0, 255, 136, 0.3);
+  --glow-warning: 0 0 20px rgba(255, 217, 61, 0.3);
+  --glow-danger: 0 0 20px rgba(255, 107, 107, 0.3);
+
+  /* ---- 动画 ---- */
+  --transition-fast: 0.2s ease;
+  --transition-normal: 0.3s ease;
+}
+
+/* ---- 全局滚动条 ---- */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 212, 255, 0.3);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(0, 212, 255, 0.5); }
+
+/* ---- 全局过渡动画 ---- */
+.fade-enter-active, .fade-leave-active {
+  transition: opacity var(--transition-normal);
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+
+.slide-fade-enter-active {
+  transition: all var(--transition-normal);
+}
+.slide-fade-leave-active {
+  transition: all var(--transition-fast);
+}
+.slide-fade-enter-from {
+  transform: translateY(20px);
+  opacity: 0;
+}
+.slide-fade-leave-to {
+  transform: translateY(-20px);
+  opacity: 0;
+}
