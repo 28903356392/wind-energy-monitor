@@ -43,12 +43,14 @@
 | **SQLite** | 数据库 |
 | **Uvicorn** | ASGI 服务器 |
 | **WebSocket** | 实时数据推送 |
+| **JWT (python-jose)** | 用户认证 |
+| **passlib + bcrypt** | 密码加密 |
 
 ---
 
 ## 功能总览
 
-### 一级大屏 —— 总览仪表盘 `/`
+### 一级大屏 —— 总览仪表盘
 
 - 核心 KPI 卡片：总功率、日发电量、平均风速、风机统计
 - 风机状态列表（点击跳转详情）
@@ -56,6 +58,18 @@
 - 实时风速仪表盘 + 风机状态占比环图
 - WebSocket 实时推送数据更新
 - 告警未读数角标
+
+### 后台管理（若依风格）
+
+| 页面 | 功能 |
+|------|------|
+| **用户管理** | 用户增删改查、角色分配 |
+| **角色管理** | 角色增删改查、菜单权限分配 |
+| **菜单管理** | 菜单树管理、权限标识配置 |
+| **字典管理** | 字典类型/数据维护 |
+| **操作日志** | 操作记录查询 |
+| **登录日志** | 登录记录查询 |
+| **系统监控** | 服务器 CPU/内存/磁盘监控 |
 
 ### 二级功能页面
 
@@ -109,7 +123,10 @@ npm run dev
 | http://localhost:3000/#/alarms | 告警中心 |
 | http://localhost:3000/#/energy | 能源报告 |
 | http://localhost:3000/#/turbine/1 | 风机详情 |
-| http://localhost:8000/docs | API 文档（Swagger） |
+| http://localhost:3000/#/system/user | 用户管理（需登录） |
+| http://localhost:8000/api/doc.html | API 文档（Knife4j 风格） |
+
+> 默认管理员：`admin` / `admin123`
 
 ---
 
@@ -156,10 +173,25 @@ wind-energy-monitor/
 │   ├── main.py                  # 应用入口
 │   ├── config.py                # 环境配置
 │   ├── database.py              # 数据库初始化 + 种子数据
-│   ├── models.py                # ORM 模型
+│   ├── security.py              # JWT 认证 + 密码加密
 │   ├── mock_data.py             # 实时数据更新任务
+│   ├── seed_coordinates.py      # 风机坐标数据（独立文件）
+│   ├── models/
+│   │   ├── base.py              # ORM 基类
+│   │   ├── turbine.py           # 风机/功率/告警/事件模型
+│   │   ├── user.py              # 用户/角色/菜单模型
+│   │   └── system.py            # 字典/日志/配置模型
 │   ├── routers/
-│   │   └── wind_farm.py         # API 路由（含 WebSocket）
+│   │   ├── wind_farm.py         # 风电场 API（含 WebSocket）
+│   │   ├── auth.py              # 认证登录 API
+│   │   ├── system.py            # 系统管理 API（用户/角色/菜单/字典/日志）
+│   │   └── docs.py              # Knife4j 风格 API 文档页
+│   ├── middleware/
+│   │   ├── auth.py              # JWT 认证中间件
+│   │   └── log.py               # 操作日志装饰器
+│   ├── schemas/
+│   │   └── user.py              # Pydantic 请求/响应模型
+│   ├── data/                    # SQLite 数据库文件
 │   └── requirements.txt
 │
 ├── deploy/                       # 部署脚本
@@ -223,7 +255,7 @@ wind-energy-monitor/
 
 ## API 文档
 
-启动后端后访问 `http://localhost:8000/docs` 查看 Swagger 文档。
+启动后端后访问 `http://localhost:8000/api/doc.html` 查看 Knife4j 风格的 API 文档。
 
 ### 主要端点
 
@@ -238,6 +270,17 @@ wind-energy-monitor/
 | GET | `/api/events` | 事件日志 |
 | GET | `/api/energy/stats` | 能源统计 |
 | WS | `/api/ws` | WebSocket 实时推送 |
+| POST | `/api/auth/login` | 用户登录 |
+| GET | `/api/auth/userinfo` | 获取当前用户信息 |
+| GET | `/api/auth/menus` | 获取用户菜单树 |
+| GET/POST/PUT/DELETE | `/api/system/users` | 用户管理 CRUD |
+| GET/POST | `/api/system/roles` | 角色管理 |
+| GET/POST/PUT/DELETE | `/api/system/menus` | 菜单管理 |
+| GET | `/api/system/dict/types` | 字典类型列表 |
+| GET | `/api/system/dict/data/{code}` | 字典数据列表 |
+| GET | `/api/system/logs/login` | 登录日志 |
+| GET | `/api/system/logs/operation` | 操作日志 |
+| GET | `/api/system/monitor` | 系统监控 |
 
 ---
 
@@ -283,7 +326,7 @@ scp deploy/nginx.conf ubuntu@your-server:/tmp/
 | 服务 | 地址 |
 |------|------|
 | **生产环境** | http://150.158.49.82 |
-| **API 文档** | http://150.158.49.82/docs |
+| **API 文档** | http://150.158.49.82/api/doc.html |
 
 ### 服务器架构
 
