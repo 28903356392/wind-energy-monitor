@@ -10,9 +10,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from config import HOST, PORT, CORS_ORIGINS, MOCK_UPDATE_INTERVAL
-from database import init_db, seed_mock_data
+from database import init_db, seed_mock_data, seed_admin
 from mock_data import update_turbines_loop
 from routers.wind_farm import router as wind_farm_router
+from routers.auth import router as auth_router
+from routers.system import router as system_router
 
 
 @asynccontextmanager
@@ -22,6 +24,7 @@ async def lifespan(app: FastAPI):
     print("[WindMonitor] 风能监控系统启动中...")
     init_db()
     seed_mock_data()
+    seed_admin()
     # 启动后台数据更新任务
     task = asyncio.create_task(update_turbines_loop(MOCK_UPDATE_INTERVAL))
     print(f"[WindMonitor] 服务已启动 | 数据更新间隔: {MOCK_UPDATE_INTERVAL}s")
@@ -49,6 +52,8 @@ app.add_middleware(
 
 # 注册路由
 app.include_router(wind_farm_router)
+app.include_router(auth_router)
+app.include_router(system_router)
 
 
 @app.get("/")

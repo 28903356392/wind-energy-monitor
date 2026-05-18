@@ -2,7 +2,11 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from config import DATABASE_URL
-from models import Base, Turbine, PowerRecord, TurbineStatus, Alarm, AlarmLevel, EventLog
+from models import Base
+from models.turbine import Turbine, PowerRecord, TurbineStatus, Alarm, AlarmLevel, EventLog
+from models.user import User, Role, Menu
+from models.system import DictType, DictData, Config
+from security import hash_password
 from datetime import datetime, timezone, timedelta
 import random
 import math
@@ -133,3 +137,79 @@ def seed_mock_data():
     session.commit()
     session.close()
     print("[OK] 模拟数据已初始化（含告警、事件）")
+
+
+def seed_admin():
+    """初始化默认管理员和基础菜单"""
+    session = get_session()
+    if session.query(User).filter(User.username == "admin").count() > 0:
+        session.close()
+        return
+
+    # 创建超管用户
+    admin = User(
+        username="admin",
+        password=hash_password("admin123"),
+        nickname="超级管理员",
+        email="admin@windfarm.com",
+        status=True,
+        is_admin=True,
+        remark="系统超管",
+    )
+    session.add(admin)
+
+    # 创建默认角色
+    role_admin = Role(name="超管角色", code="admin", status=True, sort=1, remark="系统管理员")
+    role_user = Role(name="普通用户", code="user", status=True, sort=2, remark="普通用户")
+    session.add_all([role_admin, role_user])
+
+    # 创建基础菜单（用 name 查找 parent_id，避免硬编码数字）
+    menus = []
+    menu_items = [
+        # (parent_name, name, path, component, icon, type, sort, permission)
+        (None, "风能大屏", "/dashboard", "views/dashboard/Index.vue", "Monitor", "menu", 1, ""),
+        (None, "系统管理", "", "", "Setting", "directory", 2, ""),
+        ("系统管理", "用户管理", "/system/user", "views/system/user/UserList.vue", "User", "menu", 1, "system:user:list"),
+        ("系统管理", "角色管理", "/system/role", "views/system/role/RoleList.vue", "UserFilled", "menu", 2, "system:role:list"),
+        ("系统管理", "菜单管理", "/system/menu", "views/system/menu/MenuList.vue", "Menu", "menu", 3, "system:menu:list"),
+        ("系统管理", "字典管理", "/system/dict", "views/system/dict/DictList.vue", "Reading", "menu", 4, "system:dict:list"),
+        (None, "日志管理", "", "", "Document", "directory", 3, ""),
+        ("日志管理", "操作日志", "/monitor/operation-log", "views/monitor/OperationLog.vue", "List", "menu", 1, "monitor:operation:list"),
+        ("日志管理", "登录日志", "/monitor/login-log", "views/monitor/LoginLog.vue", "Lock", "menu", 2, "monitor:login:list"),
+        (None, "系统监控", "/monitor/system", "views/monitor/SystemMonitor.vue", "DataBoard", "menu", 4, "monitor:system:list"),
+    ]
+
+    name_id_map = {}
+    for parent_name, name, path, comp, icon, mtype, sort, perm in menu_items:
+        parent_id = name_id_map.get(parent_name, 0) if parent_name else 0
+        menu = Menu(
+            parent_id=parent_id, name=name, path=path, component=comp,
+            icon=icon, type=mtype, sort=sort, permission=perm, status=True,
+        )
+        session.add(menu)
+        session.flush()
+        name_id_map[name] = menu.id
+        menus.append(menu)
+
+    # 超管角色关联所有菜单
+    role_admin.menus = menus
+
+    # 创建默认字典
+    dict_types = [
+        DictType(name="用户状态", code="sys_user_status", status=True, remark="用户状态"),
+        DictType(name="系统开关", code="sys_yes_no", status=True, remark="系统开关"),
+    ]
+    session.add_all(dict_types)
+    session.flush()
+
+    dict_data = [
+        DictData(dict_code="sys_user_status", label="正常", value="1", sort=1, tag_type="success", status=True),
+        DictData(dict_code="sys_user_status", label="停用", value="0", sort=2, tag_type="danger", status=True),
+        DictData(dict_code="sys_yes_no", label="是", value="Y", sort=1, tag_type="primary", status=True),
+        DictData(dict_code="sys_yes_no", label="否", value="N", sort=2, tag_type="info", status=True),
+    ]
+    session.add_all(dict_data)
+
+    session.commit()
+    session.close()
+    print("[OK] 默认管理员 (admin/admin123) 和菜单已初始化")

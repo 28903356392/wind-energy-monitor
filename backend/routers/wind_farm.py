@@ -1,7 +1,7 @@
 """风电场 API 路由 —— 含二级功能：告警、事件、能源统计"""
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from database import get_session
-from models import Turbine, TurbineStatus, PowerRecord, Alarm, AlarmLevel, EventLog
+from models.turbine import Turbine, TurbineStatus, PowerRecord, Alarm, AlarmLevel, EventLog
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import func
 from typing import Optional

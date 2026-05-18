@@ -4,7 +4,7 @@ import math
 import asyncio
 from datetime import datetime, timezone
 from database import get_session
-from models import Turbine, TurbineStatus, PowerRecord
+from models.turbine import Turbine, TurbineStatus, PowerRecord
 
 
 def _rand_walk(current, step_range, min_val=None, max_val=None):

@@ -1,0 +1,24 @@
+{
+  "recommendations": [
+    // Python 核心支持
+    "ms-python.python",
+    // 智能提示 / 类型检查
+    "ms-python.vscode-pylance",
+    // 调试器
+    "ms-python.debugpy",
+    // Git 可视化
+    "eamodio.gitlens",
+    // 代码格式化
+    "esbenp.prettier-vscode",
+    // 行内错误显示
+    "usernamehw.errorlens",
+    // API 测试
+    "rangav.vscode-thunder-client",
+    // 图标主题
+    "pkief.material-icon-theme",
+    // Vue 支持
+    "vue.volar",
+    // ESLint
+    "dbaeumer.vscode-eslint"
+  ]
+}
