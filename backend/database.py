@@ -1,4 +1,5 @@
 """数据库初始化"""
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from config import DATABASE_URL
@@ -7,6 +8,7 @@ from models.turbine import Turbine, PowerRecord, TurbineStatus, Alarm, AlarmLeve
 from models.user import User, Role, Menu
 from models.system import DictType, DictData, Config
 from security import hash_password
+from seed_coordinates import TURBINE_COORDINATES
 from datetime import datetime, timezone, timedelta
 import random
 import math
@@ -31,20 +33,12 @@ def seed_mock_data():
         session.close()
         return
 
-    # ---- 风机坐标 ----
-    coordinates = [
-        (40.12, 116.30), (40.13, 116.32), (40.14, 116.28), (40.11, 116.35),
-        (40.15, 116.31), (40.12, 116.33), (40.13, 116.29), (40.14, 116.34),
-        (40.11, 116.27), (40.15, 116.36), (40.12, 116.28), (40.13, 116.31),
-        (40.14, 116.33), (40.11, 116.29), (40.15, 116.30), (40.12, 116.34),
-        (40.13, 116.27), (40.14, 116.32), (40.11, 116.36), (40.15, 116.35),
-    ]
-
+    # ---- 风机坐标（从 seed_coordinates.py 引入） ----
     statuses = [TurbineStatus.RUNNING] * 15 + [TurbineStatus.STOPPED] * 2 + \
                [TurbineStatus.MAINTENANCE] * 2 + [TurbineStatus.FAULT] * 1
     random.shuffle(statuses)
 
-    for i, (lat, lon) in enumerate(coordinates):
+    for i, (lat, lon) in enumerate(TURBINE_COORDINATES):
         status = statuses[i]
         power = random.uniform(800, 1500) if status == TurbineStatus.RUNNING else 0
         wind_spd = random.uniform(5, 12) if status == TurbineStatus.RUNNING else random.uniform(0, 3)
@@ -52,6 +46,8 @@ def seed_mock_data():
         turbine = Turbine(
             name=f"WTG-{i + 1:03d}",
             status=status,
+            latitude=lat,
+            longitude=lon,
             power_output=round(power, 1),
             wind_speed=round(wind_spd, 1),
             wind_direction=round(random.uniform(0, 360), 1),
@@ -76,64 +72,27 @@ def seed_mock_data():
         )
         session.add(record)
 
-    # ---- 告警数据 ----
-    alarm_templates = [
-        (AlarmLevel.INFO, "{name} 功率波动轻微异常", 100, 200),
-        (AlarmLevel.WARNING, "{name} 温度偏高，建议检查冷却系统", 42, 40),
-        (AlarmLevel.WARNING, "{name} 风速超过安全阈值", 28, 25),
-        (AlarmLevel.CRITICAL, "{name} 震动异常，紧急停机", 0, 0),
-        (AlarmLevel.INFO, "{name} 维护计划即将到期", 0, 0),
-        (AlarmLevel.CRITICAL, "{name} 电网连接中断", 0, 0),
-        (AlarmLevel.WARNING, "{name} 发电效率低于预期", 680, 750),
-        (AlarmLevel.INFO, "{name} 已完成例行检查", 0, 0),
-    ]
-
+    # ---- 告警 + 事件（模板从 seed_templates.py 加载）----
+    from seed_templates import ALARM_TEMPLATES, EVENT_MESSAGES
     turbines_list = session.query(Turbine).all()
     for _ in range(30):
-        tmpl = random.choice(alarm_templates)
+        tmpl = random.choice(ALARM_TEMPLATES)
         t = random.choice(turbines_list)
-        alarm = Alarm(
-            turbine_id=t.id,
-            turbine_name=t.name,
-            level=tmpl[0],
-            message=tmpl[1].format(name=t.name),
-            value=tmpl[2] + random.uniform(-10, 10),
-            threshold=tmpl[3],
-            created_at=now - timedelta(
-                hours=random.randint(0, 48),
-                minutes=random.randint(0, 59)
-            ),
+        session.add(Alarm(
+            turbine_id=t.id, turbine_name=t.name,
+            level=tmpl[0], message=tmpl[1].format(name=t.name),
+            value=tmpl[2] + random.uniform(-10, 10), threshold=tmpl[3],
+            created_at=now - timedelta(hours=random.randint(0, 48), minutes=random.randint(0, 59)),
             acknowledged=random.random() < 0.6,
-        )
-        session.add(alarm)
-
-    # ---- 事件日志 ----
-    event_types = ["operation", "system", "alarm"]
-    event_messages = [
-        ("operation", "风机 {name} 启动成功"),
-        ("operation", "风机 {name} 停机"),
-        ("system", "系统状态检查完成"),
-        ("system", "数据同步任务执行成功"),
-        ("alarm", "告警规则已触发: {name}"),
-        ("operation", "运维人员登录系统"),
-        ("system", "数据库备份完成"),
-        ("operation", "参数配置已更新: {name}"),
-    ]
-
+        ))
     for _ in range(60):
-        tmpl = random.choice(event_messages)
+        tmpl = random.choice(EVENT_MESSAGES)
         t = random.choice(turbines_list)
-        event = EventLog(
-            type=tmpl[0],
-            message=tmpl[1].format(name=t.name),
+        session.add(EventLog(
+            type=tmpl[0], message=tmpl[1].format(name=t.name),
             detail=f"ID: {t.id}, 时间: {now - timedelta(minutes=random.randint(0, 1440))}",
-            timestamp=now - timedelta(
-                hours=random.randint(0, 72),
-                minutes=random.randint(0, 59)
-            ),
-        )
-        session.add(event)
-
+            timestamp=now - timedelta(hours=random.randint(0, 72), minutes=random.randint(0, 59)),
+        ))
     session.commit()
     session.close()
     print("[OK] 模拟数据已初始化（含告警、事件）")
@@ -163,32 +122,22 @@ def seed_admin():
     role_user = Role(name="普通用户", code="user", status=True, sort=2, remark="普通用户")
     session.add_all([role_admin, role_user])
 
-    # 创建基础菜单（用 name 查找 parent_id，避免硬编码数字）
+    # 创建菜单（从 menu_data.py 加载数据结构）
+    from menu_data import ALL_MENUS
     menus = []
-    menu_items = [
-        # (parent_name, name, path, component, icon, type, sort, permission)
-        (None, "风能大屏", "/dashboard", "views/dashboard/Index.vue", "Monitor", "menu", 1, ""),
-        (None, "系统管理", "", "", "Setting", "directory", 2, ""),
-        ("系统管理", "用户管理", "/system/user", "views/system/user/UserList.vue", "User", "menu", 1, "system:user:list"),
-        ("系统管理", "角色管理", "/system/role", "views/system/role/RoleList.vue", "UserFilled", "menu", 2, "system:role:list"),
-        ("系统管理", "菜单管理", "/system/menu", "views/system/menu/MenuList.vue", "Menu", "menu", 3, "system:menu:list"),
-        ("系统管理", "字典管理", "/system/dict", "views/system/dict/DictList.vue", "Reading", "menu", 4, "system:dict:list"),
-        (None, "日志管理", "", "", "Document", "directory", 3, ""),
-        ("日志管理", "操作日志", "/monitor/operation-log", "views/monitor/OperationLog.vue", "List", "menu", 1, "monitor:operation:list"),
-        ("日志管理", "登录日志", "/monitor/login-log", "views/monitor/LoginLog.vue", "Lock", "menu", 2, "monitor:login:list"),
-        (None, "系统监控", "/monitor/system", "views/monitor/SystemMonitor.vue", "DataBoard", "menu", 4, "monitor:system:list"),
-    ]
-
     name_id_map = {}
-    for parent_name, name, path, comp, icon, mtype, sort, perm in menu_items:
-        parent_id = name_id_map.get(parent_name, 0) if parent_name else 0
+    for item in ALL_MENUS:
+        if not item.active:
+            continue
+        parent_id = name_id_map.get(item.parent_name, 0) if item.parent_name else 0
         menu = Menu(
-            parent_id=parent_id, name=name, path=path, component=comp,
-            icon=icon, type=mtype, sort=sort, permission=perm, status=True,
+            parent_id=parent_id, name=item.name, path=item.path,
+            component=item.component, icon=item.icon, type=item.type,
+            sort=item.sort, permission=item.permission, status=True,
         )
         session.add(menu)
         session.flush()
-        name_id_map[name] = menu.id
+        name_id_map[item.name] = menu.id
         menus.append(menu)
 
     # 超管角色关联所有菜单

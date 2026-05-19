@@ -60,6 +60,13 @@ const routes = [
         component: () => import('../views/monitor/SystemMonitor.vue'),
         meta: { title: '系统监控', icon: 'DataBoard', permission: 'monitor:system:list' },
       },
+      // ====== 业务管理动态路由 ======
+      {
+        path: 'business/:resource',
+        name: 'BusinessPage',
+        component: () => import('../views/business/DynamicPage.vue'),
+        meta: { title: '业务管理', icon: 'Tools' },
+      },
     ],
   },
 ]

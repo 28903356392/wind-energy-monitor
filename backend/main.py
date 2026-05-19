@@ -9,12 +9,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from config import HOST, PORT, CORS_ORIGINS, MOCK_UPDATE_INTERVAL
+from config import HOST, PORT, CORS_ORIGINS, DATABASE_URL
+from app_config import APP_TITLE, APP_DESCRIPTION, APP_VERSION, MOCK_UPDATE_INTERVAL
 from database import init_db, seed_mock_data, seed_admin
 from mock_data import update_turbines_loop
 from routers.wind_farm import router as wind_farm_router
 from routers.auth import router as auth_router
 from routers.system import router as system_router
+from routers.business import router as business_router
+from routers.docs import router as docs_router
 
 
 @asynccontextmanager
@@ -22,9 +25,13 @@ async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时
     print("[WindMonitor] 风能监控系统启动中...")
-    init_db()
-    seed_mock_data()
-    seed_admin()
+    db_path = DATABASE_URL.replace('sqlite:///', '', 1)
+    if os.path.exists(db_path):
+        print(f"[SKIP] 数据库已存在 ({db_path})，跳过初始化")
+    else:
+        init_db()
+        seed_mock_data()
+        seed_admin()
     # 启动后台数据更新任务
     task = asyncio.create_task(update_turbines_loop(MOCK_UPDATE_INTERVAL))
     print(f"[WindMonitor] 服务已启动 | 数据更新间隔: {MOCK_UPDATE_INTERVAL}s")
@@ -35,9 +42,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="风能监控系统 API",
-    description="风电场大屏监控后端服务",
-    version="1.0.0",
+    title=APP_TITLE,
+    description=APP_DESCRIPTION,
+    version=APP_VERSION,
     lifespan=lifespan
 )
 
@@ -54,14 +61,16 @@ app.add_middleware(
 app.include_router(wind_farm_router)
 app.include_router(auth_router)
 app.include_router(system_router)
+app.include_router(business_router)
+app.include_router(docs_router)
 
 
 @app.get("/")
 def root():
     return {
-        "service": "风能监控系统 API",
-        "version": "1.0.0",
-        "docs": "/docs",
+        "service": APP_TITLE,
+        "version": APP_VERSION,
+        "docs": "/api/doc.html",
         "status": "running"
     }
 

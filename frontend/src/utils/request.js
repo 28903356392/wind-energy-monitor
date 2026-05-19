@@ -1,9 +1,11 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import { API_BASE, REQUEST_TIMEOUT } from '../config/api'
+import { STORAGE_KEYS } from '../config/app'
 
 const request = axios.create({
-  baseURL: '/api',
-  timeout: 15000,
+  baseURL: API_BASE,
+  timeout: REQUEST_TIMEOUT,
 })
 
 // 请求拦截：添加 Token
@@ -27,8 +29,8 @@ request.interceptors.response.use(
     if (error.response) {
       const { status, data } = error.response
       if (status === 401) {
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
+        localStorage.removeItem(STORAGE_KEYS.TOKEN)
+        localStorage.removeItem(STORAGE_KEYS.USER)
         window.location.hash = '#/login'
         ElMessage.error('登录已过期，请重新登录')
       } else if (status === 403) {
