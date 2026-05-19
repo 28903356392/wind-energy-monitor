@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from contextlib import asynccontextmanager
 from config import HOST, PORT, CORS_ORIGINS, DATABASE_URL
 from app_config import APP_TITLE, APP_DESCRIPTION, APP_VERSION, MOCK_UPDATE_INTERVAL
@@ -17,7 +18,7 @@ from routers.wind_farm import router as wind_farm_router
 from routers.auth import router as auth_router
 from routers.system import router as system_router
 from routers.business import router as business_router
-from routers.docs import router as docs_router
+
 
 
 @asynccontextmanager
@@ -45,7 +46,9 @@ app = FastAPI(
     title=APP_TITLE,
     description=APP_DESCRIPTION,
     version=APP_VERSION,
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url="/api/docs",
+    openapi_url="/api/openapi.json",
 )
 
 # CORS 配置
@@ -62,7 +65,11 @@ app.include_router(wind_farm_router)
 app.include_router(auth_router)
 app.include_router(system_router)
 app.include_router(business_router)
-app.include_router(docs_router)
+
+
+@app.get("/api/doc.html", include_in_schema=False)
+async def doc_redirect():
+    return RedirectResponse(url="/api/docs")
 
 
 @app.get("/")
@@ -70,7 +77,7 @@ def root():
     return {
         "service": APP_TITLE,
         "version": APP_VERSION,
-        "docs": "/api/doc.html",
+        "docs": "/api/docs",
         "status": "running"
     }
 
